@@ -1,43 +1,52 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useConnect, useWriteContract } from 'wagmi';
+import { useAccount, useConnect, useWriteContract, useChainId, useSwitchChain } from 'wagmi';
+import { celo } from 'wagmi/chains';
 import { injected } from 'wagmi/connectors';
 import { parseEther } from 'viem';
 import { AIPayGoABI } from '@/utils/abi';
 import { useAutoConnect } from '@/hooks/useAutoConnect';
 
-// عنوان العقد الذي قمت بنشره مسبقاً
 const CONTRACT_ADDRESS = '0xc9d59728B0dA3a3c4C3a6C6925e49ACeAe4297e5';
 
 export default function Home() {
-  // تشغيل الاتصال الصامت
   useAutoConnect();
   
-  // حل مشكلة Hydration: التأكد من أن المكون يعمل على المتصفح (Client) فقط
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
   const { writeContract, isPending } = useWriteContract();
   
   const [prompt, setPrompt] = useState('');
 
-  const handlePayment = () => {
+  // التحقق مما إذا كانت المحفظة على شبكة غير Celo
+  const isWrongNetwork = chainId !== celo.id;
+
+  const handleAction = () => {
+    // إذا كانت الشبكة خاطئة، نطلب من المحفظة التبديل إلى سيلو أولاً
+    if (isWrongNetwork) {
+      switchChain({ chainId: celo.id });
+      return;
+    }
+
     if (!prompt.trim()) return alert('Please enter a prompt first.');
     
-    // استدعاء العقد الذكي لدفع الرسوم وإرسال الطلب
+    // تمرير chainId بشكل صريح لتفادي أي أخطاء من المحفظة أثناء الدفع
     writeContract({
       address: CONTRACT_ADDRESS,
       abi: AIPayGoABI,
       functionName: 'requestAI',
       args: [prompt],
       value: parseEther('0.001'),
+      chainId: celo.id, 
     });
   };
 
-  // إخفاء الواجهة مؤقتاً في أجزاء الثانية الأولى لتجنب تعارض الخادم مع العميل
   if (!mounted) return null;
 
   return (
@@ -66,11 +75,17 @@ export default function Home() {
             />
             
             <button 
-              onClick={handlePayment}
-              disabled={isPending}
-              className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+              onClick={handleAction}
+              disabled={isPending && !isWrongNetwork}
+              className={`w-full text-white font-semibold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 ${
+                isWrongNetwork ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              {isPending ? 'Processing...' : 'Pay 0.001 CELO & Request'}
+              {isWrongNetwork 
+                ? 'Switch to Celo Network' 
+                : isPending 
+                ? 'Processing...' 
+                : 'Pay 0.001 CELO & Request'}
             </button>
           </div>
         )}
