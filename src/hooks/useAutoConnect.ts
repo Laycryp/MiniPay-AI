@@ -4,6 +4,13 @@ import { useEffect } from 'react';
 import { useConnect, useAccount } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 
+// إخبار TypeScript بوجود كائن ethereum المحقون من المحافظ
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export function useAutoConnect() {
   const { connect } = useConnect();
   const { isConnected } = useAccount();
